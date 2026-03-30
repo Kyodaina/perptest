@@ -61,41 +61,21 @@ class VisionLanguageService:
         model_dir.mkdir(parents=True, exist_ok=True)
 
         return pipeline(
-            task="image-text-to-text",
+            task="image-to-text",
             model=model_id,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
             device_map="auto",
             model_kwargs={"cache_dir": str(model_dir)},
         )
 
-    @staticmethod
-    def _default_payload() -> dict[str, Any]:
-        return {
-            "visible_text": "",
-            "prices": [],
-            "key_messages": [],
-            "cta": "",
-            "marketing_intent": "awareness",
-            "importance_score": 3,
-        }
-
     def _extract_json(self, raw_text: str) -> dict[str, Any]:
         match = re.search(r"\{.*\}", raw_text, re.DOTALL)
         content = match.group(0) if match else raw_text.strip()
-
-        try:
-            parsed = json.loads(content)
-        except Exception:
-            return self._default_payload()
+        parsed = json.loads(content)
 
         if parsed.get("marketing_intent") not in {"discount", "urgency", "branding", "awareness"}:
             parsed["marketing_intent"] = "awareness"
-
-        try:
-            parsed["importance_score"] = max(1, min(5, int(parsed.get("importance_score", 3))))
-        except Exception:
-            parsed["importance_score"] = 3
-
+        parsed["importance_score"] = max(1, min(5, int(parsed.get("importance_score", 3))))
         parsed["prices"] = [str(p) for p in parsed.get("prices", [])]
         parsed["key_messages"] = [str(m) for m in parsed.get("key_messages", [])]
 
@@ -108,51 +88,20 @@ class VisionLanguageService:
             "importance_score": parsed["importance_score"],
         }
 
-    @staticmethod
-    def _extract_generated_text(output: Any) -> str:
-        if not isinstance(output, list) or not output:
-            return "{}"
-        item = output[0]
-        if isinstance(item, dict):
-            if "generated_text" in item and isinstance(item["generated_text"], str):
-                return item["generated_text"]
-            if "generated_text" in item and isinstance(item["generated_text"], list):
-                # chat-style output, take the last text chunk
-                chunks = item["generated_text"]
-                for chunk in reversed(chunks):
-                    if isinstance(chunk, dict) and "content" in chunk:
-                        content = chunk["content"]
-                        if isinstance(content, str):
-                            return content
-                return str(chunks)
-        return str(item)
-
     def analyze_image(self, image_path: Path, family: str, size: str, precision: PrecisionMode) -> dict[str, Any]:
         pipe = self.get_pipeline(family, size)
         image = Image.open(image_path).convert("RGB")
+        out = pipe(
+            image,
+            prompt=PROMPT,
+            generate_kwargs={
+                "max_new_tokens": self._max_tokens(precision),
+                "temperature": self._temperature(precision),
+            },
+        )
+        if isinstance(out, list) and out:
+            generated = out[0].get("generated_text", "{}")
+        else:
+            generated = "{}"
 
-        generate_kwargs = {
-            "max_new_tokens": self._max_tokens(precision),
-            "temperature": self._temperature(precision),
-            "do_sample": self._temperature(precision) > 0,
-        }
-
-        # Primary: chat-format multimodal payload (works for recent LLaVA/Qwen VLM pipelines).
-        chat_messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": PROMPT},
-                ],
-            }
-        ]
-
-        try:
-            out = pipe(text=chat_messages, images=[image], generate_kwargs=generate_kwargs)
-        except Exception:
-            # Fallback: explicit <image> token prefix.
-            out = pipe(text=f"<image>\n{PROMPT}", images=[image], generate_kwargs=generate_kwargs)
-
-        generated = self._extract_generated_text(out)
         return self._extract_json(generated)
