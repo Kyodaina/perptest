@@ -1,5 +1,10 @@
 __pycache__/
 *.pyc
 .venv/
-backend/data/
-models/
+.env
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/results/*
+!storage/results/.gitkeep
+models/*
+!models/.gitkeep
