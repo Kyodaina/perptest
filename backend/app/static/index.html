@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ad Analyzer Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Advertisement Image Analyzer</h1>
+      <p>Qwen 2.5 VL · local inference only</p>
+    </header>
+
+    <main class="grid">
+      <section class="card" id="upload-view">
+        <h2>Upload View</h2>
+        <div id="drop-zone">Drop images here or click to select</div>
+        <input id="file-input" type="file" multiple accept=".jpg,.jpeg,.png,.webp" hidden />
+        <ul id="file-list"></ul>
+        <button id="start-btn" disabled>Start Analysis</button>
+      </section>
+
+      <section class="card" id="processing-view">
+        <h2>Processing View</h2>
+        <div class="progress-wrapper"><div id="progress-bar"></div></div>
+        <p id="progress-text">Waiting...</p>
+        <pre id="debug-logs"></pre>
+      </section>
+
+      <section class="card" id="results-view">
+        <h2>Results View</h2>
+        <div id="results"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
