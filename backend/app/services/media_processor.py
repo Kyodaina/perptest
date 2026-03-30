@@ -85,17 +85,7 @@ class MediaProcessor:
         ]
 
     def process_image(self, file_path: Path, family: str, size: str, precision: PrecisionMode) -> FileResult:
-        try:
-            analyzed = self.vl_service.analyze_image(file_path, family, size, precision)
-        except Exception as exc:
-            analyzed = {
-                "visible_text": "",
-                "prices": [],
-                "key_messages": [f"analysis_error: {exc}"],
-                "cta": "",
-                "marketing_intent": "awareness",
-                "importance_score": 1,
-            }
+        analyzed = self.vl_service.analyze_image(file_path, family, size, precision)
         return FileResult(
             filename=file_path.name,
             file_type="image",
@@ -116,17 +106,7 @@ class MediaProcessor:
         extracted = self._extract_frames(file_path, frame_interval_seconds, frame_dir)
         frame_results: list[FrameResult] = []
         for frame_path, ts in extracted:
-            try:
-                analyzed = self.vl_service.analyze_image(frame_path, family, size, precision)
-            except Exception as exc:
-                analyzed = {
-                    "visible_text": "",
-                    "prices": [],
-                    "key_messages": [f"analysis_error: {exc}"],
-                    "cta": "",
-                    "marketing_intent": "awareness",
-                    "importance_score": 1,
-                }
+            analyzed = self.vl_service.analyze_image(frame_path, family, size, precision)
             frame_results.append(
                 FrameResult(
                     frame_path=self._to_web_path(frame_path),
