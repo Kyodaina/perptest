@@ -1,17 +1,22 @@
-"""Pre-download Qwen2.5-VL assets into ./app/models."""
+"""Pre-download faster-whisper assets into ./app/models."""
 
-import os
+from pathlib import Path
 
-from huggingface_hub import snapshot_download
+from faster_whisper import WhisperModel
 
-MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen2.5-VL-3B-Instruct")
-CACHE_DIR = "app/models"
+MODEL_SIZE = "large-v3"
+MODEL_DIR = Path("app/models")
 
 
 def main() -> None:
-    os.environ["HF_HOME"] = CACHE_DIR
-    snapshot_download(repo_id=MODEL_ID, local_dir=CACHE_DIR)
-    print(f"Model downloaded to {CACHE_DIR}")
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    WhisperModel(
+        MODEL_SIZE,
+        device="cpu",
+        compute_type="int8",
+        download_root=str(MODEL_DIR),
+    )
+    print(f"Model '{MODEL_SIZE}' downloaded to {MODEL_DIR.resolve()}")
 
 
 if __name__ == "__main__":

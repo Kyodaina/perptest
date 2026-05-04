@@ -1,23 +1,9 @@
-# Ad Image Analyzer (Qwen2.5-VL, Local Inference)
+# Magyar Audio Transcriber (CPU-only)
 
-Production-ready local web app for analyzing advertisement creatives with **Qwen 2.5 VL**.
+Teljes, lokálisan futtatható webalkalmazás magyar nyelvű hangfájlok leiratozására.
+A rendszer kizárólag CPU-t használ, a beszédfelismerést `faster-whisper` végzi.
 
-## Features
-
-- Multi-file drag & drop upload (`jpg`, `png`, `webp`)
-- Upload progress + background threaded processing
-- Live processing logs and progress API
-- Result cards per image with:
-  - `visible_text`
-  - `prices`
-  - `marketing_intent` (`discount | urgency | branding | awareness`)
-  - `importance_score` (1-5)
-- Local inference only (no external APIs)
-- Memory-safe defaults for local machines:
-  - Uses `Qwen/Qwen2.5-VL-3B-Instruct` by default
-  - Resizes very large images before inference to prevent huge allocations
-
-## Project Structure
+## Projekt struktúra
 
 ```text
 backend/
@@ -33,6 +19,8 @@ backend/
       styles.css
       app.js
     uploads/
+    temp/
+    exports/
     models/
     config.py
     schemas.py
@@ -42,9 +30,35 @@ backend/
 README.md
 ```
 
-## Run Locally
+## Funkciók
 
-1. Create environment and install dependencies:
+- Feltöltés: `.wav`, `.mp3`, `.m4a`
+- CPU-only ASR: `faster-whisper` (`large-v3`, `int8`)
+- Automatikus modell letöltés első futtatáskor
+- Előfeldolgozás:
+  - zajcsökkentés (`noisereduce`)
+  - normalizálás
+  - enyhe dinamika-kompresszió (hangerő kiegyenlítés)
+- Időbélyeges, jól olvasható leirat
+- Progress polling API
+- Export: `.txt` és formázott `.pdf`
+- Hibakezelés nem támogatott fájlokra és feldolgozási hibákra
+
+## Telepítés és futtatás
+
+### 1) Előfeltételek
+
+- Python 3.10+
+- FFmpeg (különösen mp3/m4a támogatáshoz)
+
+Ubuntu/Debian:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ffmpeg
+```
+
+### 2) Virtuális környezet + függőségek
 
 ```bash
 cd backend
@@ -53,36 +67,33 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Download Qwen2.5-VL into a dedicated folder (`backend/app/models`):
+### 3) Modell előtöltés (opcionális, de ajánlott)
 
 ```bash
 python download_models.py
 ```
 
-Optional: use a different Qwen2.5-VL checkpoint (for example 7B) if your machine has enough RAM/VRAM:
+Ha ezt kihagyod, az app az első transzkripciónál automatikusan letölti a modellt.
 
-```bash
-MODEL_ID=Qwen/Qwen2.5-VL-7B-Instruct python download_models.py
-```
-
-3. Start server:
+### 4) Szerver indítás
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-4. Open dashboard:
+### 5) UI megnyitása
+
+Böngészőben:
 
 ```text
 http://localhost:8000
 ```
 
-## Runtime Tuning
+## Használat
 
-- `MODEL_ID`: model checkpoint (default `Qwen/Qwen2.5-VL-3B-Instruct`)
-- `MAX_IMAGE_EDGE`: max image side length before inference downscale (default `1280`)
+1. Válassz ki egy támogatott hangfájlt.
+2. Kattints a **Feldolgozás** gombra.
+3. Kövesd a státuszt és progress bart.
+4. A kész leirat megjelenik időbélyegekkel.
+5. Exportáld TXT vagy PDF formátumba.
 
-## API
-
-- `POST /api/upload` - upload multiple image files and start async analysis job
-- `GET /api/jobs/{job_id}` - polling endpoint for global + per-image progress, logs, and outputs

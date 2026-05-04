@@ -1,107 +1,75 @@
-const dropZone = document.getElementById("drop-zone");
-const fileInput = document.getElementById("file-input");
-const fileList = document.getElementById("file-list");
-const startBtn = document.getElementById("start-btn");
-const progressBar = document.getElementById("progress-bar");
-const progressText = document.getElementById("progress-text");
-const debugLogs = document.getElementById("debug-logs");
-const resultsEl = document.getElementById("results");
+const fileInput = document.getElementById('audioFile');
+const startBtn = document.getElementById('startBtn');
+const statusEl = document.getElementById('status');
+const transcriptEl = document.getElementById('transcript');
+const bar = document.getElementById('bar');
+const txtBtn = document.getElementById('txtBtn');
+const pdfBtn = document.getElementById('pdfBtn');
 
-let selectedFiles = [];
-let jobId = null;
+let lastJobId = null;
 
-function renderFiles() {
-  fileList.innerHTML = "";
-  selectedFiles.forEach((f) => {
-    const li = document.createElement("li");
-    li.textContent = `${f.name} (${Math.round(f.size / 1024)} KB)`;
-    fileList.appendChild(li);
-  });
-  startBtn.disabled = selectedFiles.length === 0;
-}
+const setStatus = (text) => (statusEl.textContent = `Státusz: ${text}`);
 
-function setFiles(files) {
-  selectedFiles = [...files].filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f.name));
-  renderFiles();
-}
-
-dropZone.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => setFiles(e.target.files));
-
-["dragenter", "dragover"].forEach((eventName) => {
-  dropZone.addEventListener(eventName, (e) => {
-    e.preventDefault();
-    dropZone.classList.add("drag");
-  });
-});
-["dragleave", "drop"].forEach((eventName) => {
-  dropZone.addEventListener(eventName, (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("drag");
-  });
-});
-dropZone.addEventListener("drop", (e) => setFiles(e.dataTransfer.files));
-
-startBtn.addEventListener("click", async () => {
-  const formData = new FormData();
-  selectedFiles.forEach((file) => formData.append("files", file));
-
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/upload");
-  xhr.upload.onprogress = (event) => {
-    if (event.lengthComputable) {
-      const uploadProgress = Math.round((event.loaded / event.total) * 100);
-      progressBar.style.width = `${uploadProgress}%`;
-      progressText.textContent = `Uploading: ${uploadProgress}%`;
-    }
-  };
-
-  xhr.onload = () => {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      const payload = JSON.parse(xhr.responseText);
-      jobId = payload.job_id;
-      pollJob();
-    } else {
-      debugLogs.textContent = `Upload failed: ${xhr.responseText}`;
-    }
-  };
-
-  xhr.send(formData);
-});
-
-function renderResultCard(item) {
-  const o = item.output;
-  const intentClass = `intent-${o.marketing_intent}`;
-  return `
-    <article class="result-card">
-      <h3>${item.file_name}</h3>
-      <a href="/uploads/${encodeURIComponent(item.file_name)}" target="_blank" rel="noreferrer">
-        <img src="/uploads/${encodeURIComponent(item.file_name)}" alt="${item.file_name}" />
-      </a>
-      <p><strong>Visible text:</strong> ${o.visible_text || "(none)"}</p>
-      <p><strong>Prices:</strong> ${o.prices.length ? o.prices.join(", ") : "(none)"}</p>
-      <p><strong>Marketing intent:</strong> <span class="badge ${intentClass}">${o.marketing_intent}</span></p>
-      <p><strong>Importance:</strong> ${"⭐".repeat(o.importance_score)} (${o.importance_score}/5)</p>
-    </article>
-  `;
-}
-
-async function pollJob() {
-  if (!jobId) return;
-
-  const res = await fetch(`/api/jobs/${jobId}`);
-  const data = await res.json();
-
-  progressBar.style.width = `${data.progress}%`;
-  progressText.textContent = `Status: ${data.status} (${data.progress}%)`;
-  debugLogs.textContent = [...data.logs, "", ...data.items.flatMap((i) => [`[${i.file_name}]`, ...i.logs])].join("\n");
-
-  resultsEl.innerHTML = data.items
-    .filter((i) => i.output)
-    .map((i) => renderResultCard(i))
-    .join("");
-
-  if (data.status === "running" || data.status === "queued") {
-    setTimeout(pollJob, 1200);
+startBtn.addEventListener('click', async () => {
+  const file = fileInput.files[0];
+  if (!file) {
+    setStatus('válassz fájlt');
+    return;
   }
+
+  txtBtn.disabled = true;
+  pdfBtn.disabled = true;
+  transcriptEl.textContent = '';
+  bar.style.width = '0%';
+
+  const form = new FormData();
+  form.append('file', file);
+
+  setStatus('feltöltés...');
+  const uploadRes = await fetch('/api/upload', { method: 'POST', body: form });
+  const uploadData = await uploadRes.json();
+
+  if (!uploadRes.ok) {
+    setStatus(uploadData.detail || 'hiba');
+    return;
+  }
+
+  lastJobId = uploadData.job_id;
+  setStatus('feldolgozás folyamatban');
+  pollJob(lastJobId);
+});
+
+async function pollJob(jobId) {
+  const res = await fetch(`/api/jobs/${jobId}`);
+  const job = await res.json();
+
+  if (!res.ok) {
+    setStatus(job.detail || 'ismeretlen hiba');
+    return;
+  }
+
+  bar.style.width = `${job.progress}%`;
+
+  if (job.status === 'completed') {
+    setStatus('kész');
+    transcriptEl.textContent = job.result.formatted_transcript;
+    txtBtn.disabled = false;
+    pdfBtn.disabled = false;
+    return;
+  }
+
+  if (job.status === 'failed') {
+    setStatus(`hiba: ${job.error}`);
+    return;
+  }
+
+  setTimeout(() => pollJob(jobId), 1200);
 }
+
+txtBtn.addEventListener('click', () => {
+  if (lastJobId) window.open(`/api/export/${lastJobId}/txt`, '_blank');
+});
+
+pdfBtn.addEventListener('click', () => {
+  if (lastJobId) window.open(`/api/export/${lastJobId}/pdf`, '_blank');
+});
